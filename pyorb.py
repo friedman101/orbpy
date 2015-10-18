@@ -1,5 +1,12 @@
-from numpy import *
-from math import *
+import numpy as np
+import math
+from math import pi
+
+def cross_mat(x):
+	if np.size(x)!=3:
+		print("passed cross_mat non 3 vector")
+	y = np.array([ [0, -x[2], x[1]], [x[2], 0, -x[0]], [-x[1], x[0], 0] ])
+	return(y)
 
 def orb2eci(SMA, ecc, inc, RAAN, arg_per, true_anom, mu):
 	# from http://www.mathworks.com/matlabcentral/fileexchange/35455-convert-keplerian-orbital-elements-to-a-state-vector
@@ -8,15 +15,13 @@ def orb2eci(SMA, ecc, inc, RAAN, arg_per, true_anom, mu):
 	O = RAAN
 	o = arg_per
 	nu = true_anom
-	p = SMA*(1-e**2)
+	p = SMA*(1-e**2) 
 
-	#mu = 398600.4418; 
+	rPQW = np.array([p*math.cos(nu)/(1 +e*math.cos(nu)),p*math.sin(nu)/(1+e*math.cos(nu)),0])
+	vPQW = np.array([-math.sqrt(mu/p)*math.sin(nu),math.sqrt(mu/p)*(e+math.cos(nu)),0])
 
-	rPQW = matrix([p*cos(nu)/(1 +e*cos(nu)),p*sin(nu)/(1+e*cos(nu)),0])
-	vPQW = matrix([-sqrt(mu/p)*sin(nu),sqrt(mu/p)*(e+cos(nu)),0])
-
-	PQW2IJK = zeros((3,3));
-	cO = cos(O); sO = sin(O); co = cos(o); so = sin(o); ci = cos(i); si = sin(i)
+	PQW2IJK = np.zeros((3,3));
+	cO = math.cos(O); sO = math.sin(O); co = math.cos(o); so = math.sin(o); ci = math.cos(i); si = math.sin(i)
 	PQW2IJK[0,0] = cO*co-sO*so*ci
 	PQW2IJK[0,1] = -cO*so-sO*co*ci
 	PQW2IJK[0,2] = sO*si
@@ -27,65 +32,66 @@ def orb2eci(SMA, ecc, inc, RAAN, arg_per, true_anom, mu):
 	PQW2IJK[2,1] = co*si
 	PQW2IJK[2,2] = ci
 
-	r = PQW2IJK*transpose(rPQW)
-	v = PQW2IJK*transpose(vPQW)
+	r = PQW2IJK.dot(np.transpose(rPQW))
+	v = PQW2IJK.dot(np.transpose(vPQW))
 
-	pos = squeeze(asarray(r))
-	vel = squeeze(asarray(v))
-	return (pos, vel)
+	pos = r
+	vel = v
+
+	return(pos, vel)
 
 def eci2orb(pos, vel, mu):
 	# from http://www.mathworks.com/matlabcentral/fileexchange/35455-convert-keplerian-orbital-elements-to-a-state-vector
 	r = pos
 	v = vel
 	# Specific angular momentum
-	h = cross(r,v)
-	n = cross([0,0,1],h)
-	nMag = sqrt(dot(n,n))
-	vMag = sqrt(dot(v,v))
-	rMag = sqrt(dot(r,r))
-	hMag = sqrt(dot(h,h))
-	e = (1.0/mu)*((vMag**2 - mu/rMag)*r - dot(r,v)*v)
-	eMag = sqrt(dot(e,e))
+	h = np.cross(r,v)
+	n = np.cross([0,0,1],h)
+	nMag = math.sqrt(np.dot(n,n))
+	vMag = math.sqrt(np.dot(v,v))
+	rMag = math.sqrt(np.dot(r,r))
+	hMag = math.sqrt(np.dot(h,h))
+	e = (1.0/mu)*((vMag**2 - mu/rMag)*r - np.dot(r,v)*v)
+	eMag = math.sqrt(np.dot(e,e))
 	zeta = (vMag**2)/2 - mu/rMag
 
 	a = -mu/(2*zeta)
 	p = a*(1-eMag**2)
-	i = acos(h[2]/hMag);
+	i = math.acos(h[2]/hMag);
 
 	if n[0] != 0:
-		O = acos(n[0]/nMag)
+		O = math.acos(n[0]/nMag)
 	else:
 		O = 0
 
-	if dot(n,e) != 0:
-		o = acos(dot(n,e)/(nMag*eMag))
+	if np.dot(n,e) != 0:
+		o = math.acos(np.dot(n,e)/(nMag*eMag))
 	else:
 		o = 0
 
-	if dot(e,r) != 0:
-		nu = acos(dot(e,r)/(eMag*rMag))
+	if np.dot(e,r) != 0:
+		nu = math.acos(np.dot(e,r)/(eMag*rMag))
 	else:
 		nu = 0;
 
 	if e[0] != 0:
-		lonPer = acos(e[0]/eMag)
+		lonPer = math.acos(e[0]/eMag)
 	else:
 		lonPer = 0
 
-	if dot(n,r) != 0:
-		argLat = acos(dot(n,r)/(nMag*rMag))
+	if np.dot(n,r) != 0:
+		argLat = math.acos(np.dot(n,r)/(nMag*rMag))
 	else:
 		argLat = 0
 
-	truLon = acos(r[0]/rMag);
+	truLon = math.acos(r[0]/rMag);
 
 	# quadrant check
 	if n[1] < 0:
 		O = 2*pi-O
 	if e[2] < 0:
 		o = 2*pi-o 
-	if dot(r,v) < 0:
+	if np.dot(r,v) < 0:
 		nu = 2*pi-nu
 	if e[1] < 0:
 		lonPer = 2*pi-lonPer
@@ -104,17 +110,13 @@ def eci2orb(pos, vel, mu):
 
 def anom_residual(true_anom,mean_anom,ecc):
 	residual = mean_anom - true2mean_anom(true_anom, ecc)
-	return residual
-
-def anom_residual_by_true(true_anom,ecc):
-	x = ((ecc*(cos(true_anom)+ecc)*sin(true_anom))/(ecc*cos(true_anom)+1)**2-sin(true_anom)/(ecc*cos(true_anom)+1))/sqrt(1-(cos(true_anom)+ecc)**2/(ecc*cos(true_anom)+1)**2)-(ecc*((ecc*(cos(true_anom)+ecc)*sin(true_anom))/(ecc*cos(true_anom)+1)**2-sin(true_anom)/(ecc*cos(true_anom)+1))*cos(acos((cos(true_anom)+ecc)/(ecc*cos(true_anom)+1))))/sqrt(1-(cos(true_anom)+ecc)**2/(ecc*cos(true_anom)+1)**2)
-	return(x)
+	return(residual)
 
 def true2mean_anom(true_anom, ecc):
 	# from http://www.braeunig.us/space/orbmech.htm
 
-	E = atan2(sqrt(1-ecc**2)*sin(true_anom),ecc+cos(true_anom))
-	mean_anom = E - ecc*sin(E)
+	E = math.atan2(math.sqrt(1-ecc**2)*math.sin(true_anom),ecc+math.cos(true_anom))
+	mean_anom = E - ecc*math.sin(E)
 	if mean_anom < 0:
 		mean_anom = 2*pi + mean_anom 
 	return(mean_anom)
@@ -127,13 +129,13 @@ def mean2true_anom(mean_anom, ecc):
 	dx = 1e-9;
 
 	if mean_anom < 0:
-		mean_anom = 2*pi + true_anom
+		mean_anom = 2*pi + mean_anom
 
 	if abs(mean_anom) < tol:
 		return mean_anom
 
 	true_anom = mean_anom
-	# have to newton iterate as function isn't invertible
+	# have to newton iterate as function isn"t invertible
 	for i in range(0,max_iter):
 		f = anom_residual(true_anom, mean_anom, ecc)
 		fp = anom_residual(true_anom+dx, mean_anom, ecc)
@@ -144,20 +146,18 @@ def mean2true_anom(mean_anom, ecc):
 			break
 
 	if i==max_iter-1:
-		print('badness')
+		print("max newton iterations exceeded")
 
 	if true_anom < 0:
 		true_anom = 2*pi + true_anom
 
-	return (true_anom)
+	return(true_anom)
 
 def twobody_prop(pos, vel, t, mu):
-	# from http://www.braeunig.us/space/orbmech.htm
-
 	(ecc, inc, RAAN, arg_per, true_anom, SMA) = eci2orb(pos, vel, mu)
 	mean_anom0 = true2mean_anom(true_anom, ecc)
-	n = sqrt(mu/SMA**3);
+	n = math.sqrt(mu/SMA**3);
 	mean_anom = mean_anom0 + n*t;
 	true_anom = mean2true_anom(mean_anom, ecc)
 	(pos, vel) = orb2eci(SMA, ecc, inc, RAAN, arg_per, true_anom, mu)
-	return (pos, vel)
+	return(pos, vel)
