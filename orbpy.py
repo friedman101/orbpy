@@ -2,6 +2,34 @@ import numpy as np
 import math
 from math import pi
 
+def eci2ecef(UTC, xp, yp, DUT1, DAT):
+	# from http://aa.usno.navy.mil/publications/docs/Circular_179.pdf
+	UT1 = UTC + DUT1
+	TAI = UTC+DAT
+	TT=TAI+32.184
+	TBD=TT
+
+	DU = unixtime2JD(UT1) - 2451545.0
+	theta = 0.7790572732640 + 1.00273781191135448*DU
+	T = (unixtime2JD(TBD) - 2451545.0)/36525
+	GMST =  86400*theta+ (0.014506 + 4612.156534*T+ 1.3915817*T**2-0.00000044*T**3-0.000029956*T**4-0.0000000368*T**5)/15
+
+	eps = 84381.406-46.836769*T-0.0001831*T**2+ 0.00200340*T**3-0.000000576*T**4-0.0000000434*T**5
+
+def R1(x):
+	y = np.array([ [1, 0, 0], [0, math.cos(x), math.sin(x)], [0, -math.sin(x), math.cos(x)] ])
+	return(y)
+
+def R2(x):
+	y = np.array([ [math.cos(x), 0, -math.sin(x)], [0, 1, 0], [math.sin(x), 0, math.cos(x)] ])
+	return(y)
+
+def R3(x):
+	y = np.array([ [math.cos(x), math.sin(x), 0], [-math.sin(x), math.cos(x), 0], [0, 0, 1] ])
+
+def unixtime2JD(UT1):
+	return ( unix_time / 86400.0 ) + 2440587.5
+
 def cross_mat(x):
 	if np.size(x)!=3:
 		print("passed cross_mat non 3 vector")
@@ -17,8 +45,8 @@ def orb2eci(SMA, ecc, inc, RAAN, arg_per, true_anom, mu):
 	nu = true_anom
 	p = SMA*(1-e**2) 
 
-	rPQW = np.array([p*math.cos(nu)/(1 +e*math.cos(nu)),p*math.sin(nu)/(1+e*math.cos(nu)),0])
-	vPQW = np.array([-math.sqrt(mu/p)*math.sin(nu),math.sqrt(mu/p)*(e+math.cos(nu)),0])
+	rPQW = np.array([[p*math.cos(nu)/(1 +e*math.cos(nu)),p*math.sin(nu)/(1+e*math.cos(nu)),0]])
+	vPQW = np.array([[-math.sqrt(mu/p)*math.sin(nu),math.sqrt(mu/p)*(e+math.cos(nu)),0]])
 
 	PQW2IJK = np.zeros((3,3));
 	cO = math.cos(O); sO = math.sin(O); co = math.cos(o); so = math.sin(o); ci = math.cos(i); si = math.sin(i)
@@ -32,11 +60,11 @@ def orb2eci(SMA, ecc, inc, RAAN, arg_per, true_anom, mu):
 	PQW2IJK[2,1] = co*si
 	PQW2IJK[2,2] = ci
 
-	r = PQW2IJK.dot(np.transpose(rPQW))
-	v = PQW2IJK.dot(np.transpose(vPQW))
+	r = PQW2IJK.dot(rPQW.transpose())
+	v = PQW2IJK.dot(vPQW.transpose())
 
-	pos = r
-	vel = v
+	pos = np.squeeze(r)
+	vel = np.squeeze(v)
 
 	return(pos, vel)
 
