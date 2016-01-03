@@ -47,6 +47,13 @@ print(op.cross_mat(x1).dot(x2))
 
 filename = "data/nutation_series.txt"
 nutation_series=op.load_nutation_series(filename)
-(F,D,Psi,del_psi,del_eps) = op.calc_nutation(0,nutation_series)
+
+UTC = 1451781154
+xp = 0
+yp = 0
+DUT1 = 0
+DAT = 0
+R = op.eci2ecef(UTC, xp, yp, DUT1, DAT, nutation_series)
+print(R)
 
 pp.show()

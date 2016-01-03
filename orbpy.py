@@ -5,20 +5,83 @@ from math import pi,sin,cos
 def eci2ecef(UTC, xp, yp, DUT1, DAT, nutation_series):
         # from http://aa.usno.navy.mil/publications/docs/Circular_179.pdf
         UT1 = UTC + DUT1
-        TAI = UTC+DAT
-        TT=TAI+32.184
-        TBD=TT
+        TAI = UTC + DAT
+        TT = TAI + 32.184
+        TBD = TT
 
 	DU = unixtime2JD(UT1) - 2451545.0
         theta = 0.7790572732640 + 1.00273781191135448*DU
         T = (unixtime2JD(TBD) - 2451545.0)/36525
-        GMST =  86400*theta+ (0.014506 + 4612.156534*T+ 1.3915817*T**2-0.00000044*T**3-0.000029956*T**4-0.0000000368*T**5)/15
+        GMST =  86400*theta \
+                + (0.014506 \
+                   + 4612.156534*T \
+                   + 1.3915817*T**2 \
+                   -0.00000044*T**3 \
+                   -0.000029956*T**4 \
+                   -0.0000000368*T**5)/15
 
         eps0 = 84381.406
-        eps = eps0-46.836769*T-0.0001831*T**2+ 0.00200340*T**3-0.000000576*T**4-0.0000000434*T**5
-        (F,D,Psi,del_psi,del_eps) = op.calc_nutation(T,nutation_series)
-       
-        return
+        eps = eps0 \
+              -46.836769*T \
+              -0.0001831*T**2 \
+              + 0.00200340*T**3 \
+              -0.000000576*T**4 \
+              -0.0000000434*T**5
+        (F,D,Psi,del_psi,del_eps) = calc_nutation(T,nutation_series)
+
+        Eps_ups = -del_psi*cos(eps) \
+                  + 0.00264096*sin(Psi) \
+                  + 0.00006352*sin(2*Psi) \
+                  + 0.00001175*sin(2*F-2*D+3*Psi) \
+                  + 0.00001121*sin(2*F-2*D+Psi) \
+                  - 0.00000455*sin(2*F-2*D+2*Psi) \
+                  + 0.00000202*sin(2*F+3*Psi) \
+                  + 0.00000198*sin(2*F+Psi) \
+                  - 0.00000172*sin(3*Psi) \
+                  - 0.00000087*T*sin(Psi)
+
+        GAST = GMST + Eps_ups/15
+
+        psiA =  5038.481507*T \
+                - 1.0790069*T**2 \
+                - 0.00114045*T**3 \
+                + 0.000132851*T**4 \
+                - 0.0000000951*T**5
+        omegaA = eps0 \
+                 - 0.025754*T \
+                 + 0.0512623*T**2 \
+                 - 0.00772503*T**3 \
+                 - 0.000000467*T**4 \
+                 + 0.0000003337*T**5
+        ChiA = 10.556403*T \
+               - 2.3814292*T**2 \
+               - 0.00121197*T**3 \
+               + 0.000170663*T**4 \
+               - 0.0000000560*T**5
+
+        P = R3(-ChiA).dot(R1(-omegaA)).dot(R3(-psiA)).dot(R1(eps0))
+
+        W = np.array([ [1, 0, -xp], [0, 1, yp], [xp, -yp, 1] ])
+
+        S1 = sin(eps)
+        S2 = sin(-del_psi)
+        S3 = sin(-eps * -del_eps)
+        C1 = cos(eps)
+        C2 = cos(-del_eps)
+        C3 = cos(-eps * -del_eps)
+        N = np.array([ [C2, S2*C1, S2*S1],
+                       [-S2*C3, C3*C2*C1-S1*S3, C3*C2*S1+C1*S3],
+                       [S2*S3, -S3*C2*C1-S1*C3, -S3*C2*S1+C3*C1]])
+
+        mas2rad = 1/206264806.247
+        da0 = -14.6*mas2rad
+        Xi0 = -16.6170*mas2rad
+        eta0 = -6.8192*mas2rad
+        B = np.array([ [1, da0, -Xi0], [-da0, 1, -eta0], [Xi0, eta0, 1]])
+
+        R_ecef2eci = B.transpose().dot(P.transpose()).dot(N.transpose()).dot(R3(-GAST)).dot(W)
+
+        return(R_ecef2eci.transpose())
 
 def calc_nutation(T, nutation_series):
         # from http://aa.usno.navy.mil/publications/docs/Circular_179.pdf
@@ -68,18 +131,25 @@ def load_nutation_series(filename):
         return(nutation_series)
 
 def R1(x):
-        y = np.array([ [1, 0, 0], [0, math.cos(x), math.sin(x)], [0, -math.sin(x), math.cos(x)] ])
+        y = np.array([ [1, 0, 0], \
+                       [0, math.cos(x), math.sin(x)], \
+                       [0, -math.sin(x), math.cos(x)] ])
         return(y)
 
 def R2(x):
-        y = np.array([ [math.cos(x), 0, -math.sin(x)], [0, 1, 0], [math.sin(x), 0, math.cos(x)] ])
+        y = np.array([ [math.cos(x), 0, -math.sin(x)], \
+                       [0, 1, 0], \
+                       [math.sin(x), 0, math.cos(x)] ])
         return(y)
 
 def R3(x):
-        y = np.array([ [math.cos(x), math.sin(x), 0], [-math.sin(x), math.cos(x), 0], [0, 0, 1] ])
+        y = np.array([ [math.cos(x), math.sin(x), 0], \
+                       [-math.sin(x), math.cos(x), 0], \
+                       [0, 0, 1] ])
+        return(y)
 
 def unixtime2JD(UT1):
-        return ( unix_time / 86400.0 ) + 2440587.5
+        return ( UT1 / 86400.0 ) + 2440587.5
 
 def cross_mat(x):
         if np.size(x)!=3:
@@ -96,11 +166,20 @@ def orb2eci(SMA, ecc, inc, RAAN, arg_per, true_anom, mu):
         nu = true_anom
         p = SMA*(1-e**2) 
 
-	rPQW = np.array([[p*math.cos(nu)/(1 +e*math.cos(nu)),p*math.sin(nu)/(1+e*math.cos(nu)),0]])
-        vPQW = np.array([[-math.sqrt(mu/p)*math.sin(nu),math.sqrt(mu/p)*(e+math.cos(nu)),0]])
+	rPQW = np.array([[p*math.cos(nu)/(1 +e*math.cos(nu)), \
+                          p*math.sin(nu)/(1+e*math.cos(nu)), \
+                          0]])
+        vPQW = np.array([[-math.sqrt(mu/p)*math.sin(nu), \
+                          math.sqrt(mu/p)*(e+math.cos(nu)), \
+                          0]])
 
 	PQW2IJK = np.zeros((3,3));
-        cO = math.cos(O); sO = math.sin(O); co = math.cos(o); so = math.sin(o); ci = math.cos(i); si = math.sin(i)
+        cO = math.cos(O)
+        sO = math.sin(O)
+        co = math.cos(o)
+        so = math.sin(o)
+        ci = math.cos(i)
+        si = math.sin(i)
         PQW2IJK[0,0] = cO*co-sO*so*ci
         PQW2IJK[0,1] = -cO*so-sO*co*ci
         PQW2IJK[0,2] = sO*si
